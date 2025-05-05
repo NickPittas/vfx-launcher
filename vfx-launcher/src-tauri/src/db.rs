@@ -15,8 +15,20 @@ pub fn get_connection() -> rusqlite::Result<Connection> {
     logger::info(&format!("DB CONNECTION DEBUG: Attempting to open database at: {}", db_path.to_string_lossy()));
     
     // Check if the database file exists
-    if !db_path.exists() {
-        logger::error(&format!("DB CONNECTION ERROR: Database file does not exist at: {}", db_path.to_string_lossy()));
+    let db_exists = db_path.exists();
+    if !db_exists {
+        // Make sure the directory exists
+        if let Some(parent_dir) = db_path.parent() {
+            if !parent_dir.exists() {
+                if let Err(e) = std::fs::create_dir_all(parent_dir) {
+                    logger::error(&format!("Failed to create database directory {}: {}", parent_dir.display(), e));
+                } else {
+                    logger::info(&format!("Created database directory: {}", parent_dir.display()));
+                }
+            }
+        }
+
+        logger::warn("Database file does not exist. Will create a new one.");
     }
     
     match Connection::open(&db_path) {
@@ -39,6 +51,19 @@ pub fn get_connection() -> rusqlite::Result<Connection> {
                 Err(e) => logger::warn(&format!("Failed to set journal_mode pragma: {}", e)),
             }
             
+            // If this is a new database, initialize it
+            if !db_exists {
+                logger::info("New database detected, initializing schema...");
+                if let Err(e) = init_db_with_admin(&conn) {
+                    logger::error(&format!("Failed to initialize database: {}", e));
+                }
+            } else {
+                // Even for existing databases, ensure admin exists
+                if let Err(e) = ensure_admin_user_exists(&conn) {
+                    logger::error(&format!("Failed to ensure admin user exists: {}", e));
+                }
+            }
+            
             Ok(conn)
         },
         Err(e) => {
@@ -55,6 +80,12 @@ pub fn init_db() -> Result<(), String> {
         Ok(conn) => conn,
         Err(e) => return Err(format!("Failed to open DB: {}", e))
     };
+    init_db_tables(&conn)
+}
+
+// Initialize database tables using an existing connection
+fn init_db_tables(conn: &Connection) -> Result<(), String> {
+    // Connection is now passed as a parameter
     conn.execute_batch(
         "
         CREATE TABLE IF NOT EXISTS projects (
@@ -138,6 +169,56 @@ pub fn init_db() -> Result<(), String> {
         "INSERT OR IGNORE INTO settings (id, default_scan_subdirs, default_include_patterns, default_exclude_patterns) VALUES (1, ?, ?, ?)",
         params!["nuke,ae", "*.nk,*.aep", ""],
     ).map_err(|e| format!("Failed to insert default settings: {}", e))?;
+    
+    Ok(())
+}
+
+// Initialize database with admin user
+fn init_db_with_admin(conn: &Connection) -> Result<(), String> {
+    // First initialize tables
+    init_db_tables(conn)?;
+    
+    // Then ensure admin user exists
+    ensure_admin_user_exists(conn)?;
+    
+    Ok(())
+}
+
+// Ensure admin user exists
+fn ensure_admin_user_exists(conn: &Connection) -> Result<(), String> {
+    use bcrypt::{hash, DEFAULT_COST};
+    
+    logger::info("Checking for admin user...");
+    
+    // Check if admin user exists
+    let admin_exists: bool = conn.query_row(
+        "SELECT 1 FROM users WHERE username = 'admin'",
+        [],
+        |_| Ok(true)
+    ).unwrap_or(false);
+    
+    if !admin_exists {
+        logger::info("Admin user does not exist, creating...");
+        
+        // Create admin user
+        let password = "admin";
+        logger::info(&format!("Setting admin password to: {}", password));
+        
+        let hashed = hash(password, DEFAULT_COST)
+            .map_err(|e| format!("Failed to hash password: {}", e))?;
+            
+        let now = Utc::now().to_rfc3339();
+        
+        // Insert the admin user
+        conn.execute(
+            "INSERT INTO users (username, password, email, role, created_at) VALUES (?, ?, ?, ?, ?)",
+            params!["admin", hashed, "admin@example.com", "admin", now]
+        ).map_err(|e| format!("Failed to create admin user: {}", e))?;
+        
+        logger::info("Admin user created successfully");
+    } else {
+        logger::info("Admin user already exists");
+    }
     
     Ok(())
 }

@@ -532,6 +532,21 @@ pub fn open_file(file_path: String, app_path: String) -> Result<(), String> {
         return Err(err_msg.to_string());
     }
     
+    // Check if we're opening a Nuke file (.nk extension)
+    let is_nuke_file = if let Some(extension) = Path::new(&file_path).extension() {
+        if let Some(ext_str) = extension.to_str() {
+            ext_str.to_lowercase() == "nk"
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+    
+    if is_nuke_file {
+        logger::info("Detected Nuke file, will launch as NukeX");
+    }
+    
     // Check if file exists
     if !Path::new(&normalized_file_path).exists() {
         let err_msg = format!("File does not exist: {}", file_path);
@@ -544,12 +559,19 @@ pub fn open_file(file_path: String, app_path: String) -> Result<(), String> {
     {
         use std::process::Command;
         let result = if !normalized_app_path.is_empty() {
-            // If app_path is specified, use it directly
-            Command::new(&normalized_app_path)
-                .arg(&normalized_file_path)
-                .spawn()
-                .map(|_| ())
-                .map_err(|e| e.to_string())
+            // If app_path is specified, use it directly with proper arguments
+            let mut cmd = Command::new(&normalized_app_path);
+            
+            // If it's a Nuke file, run it as NukeX by adding --nukex argument
+            if is_nuke_file {
+                logger::info("Running Nuke as NukeX on Windows");
+                cmd.arg("--nukex");
+            }
+            
+            cmd.arg(&normalized_file_path)
+               .spawn()
+               .map(|_| ())
+               .map_err(|e| e.to_string())
         } else {
             // Use the default association through cmd /c start
             Command::new("cmd")
@@ -571,26 +593,98 @@ pub fn open_file(file_path: String, app_path: String) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         use std::process::Command;
+        use std::fs::File;
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
         
-        // On macOS, use 'open' command
-        logger::info("Using macOS 'open' command");
-        
-        let mut args = Vec::new();
-        
-        if !normalized_app_path.is_empty() {
-            // If app_path is specified, use it
-            args.push("-a");
-            args.push(&normalized_app_path);
-        }
-        
-        args.push(&normalized_file_path);
-        
-        match Command::new("open").args(&args).output() {
-            Ok(_) => (),
-            Err(e) => {
-                let err_msg = format!("Failed to open file: {}", e);
-                logger::error(&err_msg);
-                return Err(err_msg);
+        if is_nuke_file && !normalized_app_path.is_empty() {
+            // For Nuke files on macOS, create a temporary shell script that will launch NukeX with the right arguments
+            // This is more reliable than trying to pass args directly to macOS .app bundles
+            logger::info("Creating launcher script for NukeX on macOS");
+            
+            // Create a temporary script to launch NukeX
+            let temp_dir = std::env::temp_dir();
+            let script_path = temp_dir.join("launch_nukex.sh");
+            
+            // Determine if app_path points to the .app bundle or the executable inside
+            let executable_path = if normalized_app_path.ends_with(".app") {
+                // If it's a .app bundle, construct the path to the executable inside
+                format!("{}/Contents/MacOS/Nuke", normalized_app_path)
+            } else {
+                // If it's already pointing to the executable, use as is
+                normalized_app_path.clone()
+            };
+            
+            // Log the paths for debugging
+            logger::info(&format!("NukeX executable path: {}", executable_path));
+            logger::info(&format!("File path: {}", normalized_file_path));
+            
+            // Create script content
+            let script_content = format!("#!/bin/bash\n\n# Launch NukeX with file\n\"{}\" --nukex \"{}\"\n",
+                executable_path, normalized_file_path);
+            
+            // Write the script
+            match File::create(&script_path) {
+                Ok(mut file) => {
+                    if let Err(e) = file.write_all(script_content.as_bytes()) {
+                        let err_msg = format!("Failed to write launch script: {}", e);
+                        logger::error(&err_msg);
+                        return Err(err_msg);
+                    }
+                    
+                    // Make the script executable
+                    if let Err(e) = std::fs::set_permissions(&script_path, std::fs::Permissions::from_mode(0o755)) {
+                        let err_msg = format!("Failed to make script executable: {}", e);
+                        logger::error(&err_msg);
+                        return Err(err_msg);
+                    }
+                    
+                    // Execute the script
+                    logger::info(&format!("Executing script: {}", script_path.display()));
+                    let result = Command::new(&script_path)
+                        .spawn()
+                        .map(|_| ())
+                        .map_err(|e| e.to_string());
+                    
+                    match result {
+                        Ok(_) => {
+                            logger::info("Successfully launched NukeX via script");
+                            return Ok(());
+                        },
+                        Err(e) => {
+                            let err_msg = format!("Failed to execute NukeX launch script: {}", e);
+                            logger::error(&err_msg);
+                            return Err(err_msg);
+                        }
+                    }
+                },
+                Err(e) => {
+                    let err_msg = format!("Failed to create launch script: {}", e);
+                    logger::error(&err_msg);
+                    return Err(err_msg);
+                }
+            }
+        } else {
+            // For other files or if no app path, use standard 'open' command
+            logger::info("Using macOS 'open' command for non-Nuke file");
+            
+            let mut args = Vec::new();
+            
+            if !normalized_app_path.is_empty() {
+                // If app_path is specified, use it
+                args.push("-a");
+                args.push(&normalized_app_path);
+            }
+            
+            args.push(&normalized_file_path);
+            
+            match Command::new("open").args(&args).output() {
+                Ok(_) => (),
+                Err(e) => {
+                    let err_msg = format!("Failed to open file: {}", e);
+                    logger::error(&err_msg);
+                    return Err(err_msg);
+                }
             }
         }
     }
@@ -600,11 +694,18 @@ pub fn open_file(file_path: String, app_path: String) -> Result<(), String> {
         use std::process::Command;
         let result = if !normalized_app_path.is_empty() {
             // If app_path is specified, use it
-            Command::new(&normalized_app_path)
-                .arg(&normalized_file_path)
-                .spawn()
-                .map(|_| ())
-                .map_err(|e| e.to_string())
+            let mut cmd = Command::new(&normalized_app_path);
+            
+            // If it's a Nuke file, run it as NukeX by adding --nukex argument
+            if is_nuke_file {
+                logger::info("Running Nuke as NukeX on Linux");
+                cmd.arg("--nukex");
+            }
+            
+            cmd.arg(&normalized_file_path)
+               .spawn()
+               .map(|_| ())
+               .map_err(|e| e.to_string())
         } else {
             // If no app_path is specified, use the xdg-open command
             Command::new("xdg-open")

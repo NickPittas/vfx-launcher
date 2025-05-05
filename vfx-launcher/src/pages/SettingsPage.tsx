@@ -97,27 +97,76 @@ const SettingsPage: React.FC = () => {
       <form onSubmit={handleSaveSettings} className="space-y-4 max-w-2xl">
         <div>
           <label htmlFor="nuke_executable_path" className="block text-sm font-medium">Nuke Executable Path</label>
-          <input
-            type="text"
-            id="nuke_executable_path"
-            name="nuke_executable_path"
-            value={settings.nuke_executable_path || ''}
-            onChange={handleInputChange}
-            className="mt-1 block w-full input-field"
-            placeholder="/Path/to/Nuke"
-          />
+          <div className="flex mt-1">
+            <input
+              type="text"
+              id="nuke_executable_path"
+              name="nuke_executable_path"
+              value={settings.nuke_executable_path || ''}
+              onChange={handleInputChange}
+              className="block w-full input-field rounded-r-none"
+              placeholder="/Path/to/Nuke"
+            />
+            <label 
+              htmlFor="nuke_file_input"
+              className="px-4 py-2 bg-blue-600 text-white rounded-r-md hover:bg-blue-700 transition-colors cursor-pointer flex items-center justify-center"
+            >
+              Browse
+            </label>
+            <input
+              type="file"
+              id="nuke_file_input"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  // Get the file path using webkitRelativePath or just use the name
+                  // In production, we'd need a Rust command to convert this to a proper path
+                  // For now this is just for UI demonstration
+                  const fileName = e.target.files[0].name;
+                  const samplePath = `/Applications/${fileName}`;
+                  setSettings(prev => ({ ...prev, nuke_executable_path: samplePath }));
+                  setSuccessMessage(null);
+                }
+              }}
+            />
+          </div>
+          <p className="text-xs text-gray-500 mt-1">Select NukeX executable - will be launched with --nukex flag</p>
         </div>
         <div>
           <label htmlFor="ae_executable_path" className="block text-sm font-medium">After Effects Executable Path</label>
-          <input
-            type="text"
-            id="ae_executable_path"
-            name="ae_executable_path"
-            value={settings.ae_executable_path || ''}
-            onChange={handleInputChange}
-            className="mt-1 block w-full input-field"
-            placeholder="/Path/to/AfterEffects"
-          />
+          <div className="flex mt-1">
+            <input
+              type="text"
+              id="ae_executable_path"
+              name="ae_executable_path"
+              value={settings.ae_executable_path || ''}
+              onChange={handleInputChange}
+              className="block w-full input-field rounded-r-none"
+              placeholder="/Path/to/AfterEffects"
+            />
+            <label 
+              htmlFor="ae_file_input"
+              className="px-4 py-2 bg-blue-600 text-white rounded-r-md hover:bg-blue-700 transition-colors cursor-pointer flex items-center justify-center"
+            >
+              Browse
+            </label>
+            <input
+              type="file"
+              id="ae_file_input"
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  // Get the file path using webkitRelativePath or just use the name
+                  // In production, we'd need a Rust command to convert this to a proper path
+                  // For now this is just for UI demonstration
+                  const fileName = e.target.files[0].name;
+                  const samplePath = `/Applications/${fileName}`;
+                  setSettings(prev => ({ ...prev, ae_executable_path: samplePath }));
+                  setSuccessMessage(null);
+                }
+              }}
+            />
+          </div>
         </div>
         <div>
           <label htmlFor="default_scan_subdirs" className="block text-sm font-medium">Default Scan Subdirectories (comma-separated)</label>

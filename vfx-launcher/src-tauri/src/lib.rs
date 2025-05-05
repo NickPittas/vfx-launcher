@@ -74,7 +74,6 @@ pub fn run() {
         logger::info("Users initialized successfully");
     }
     tauri::Builder::default()
-        // Removed dialog plugin to fix build issues
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![

@@ -78,7 +78,32 @@ pub fn normalize_path(path: &str) -> String {
 pub fn get_network_database_path() -> PathBuf {
     // For network deployment, we'll use the network path
     let cfg = config::get_config();
-    PathBuf::from(format!("{}/vfx_launcher.db", cfg.database.network_path))
+    let db_path = format!("{}/vfx_launcher.db", cfg.database.network_path);
+    
+    // Check if this is a UNC path that needs to be converted to a mounted path
+    if get_os_type() == OsType::MacOS && db_path.starts_with("//") {
+        // Convert UNC path to mounted volume path
+        let path_parts: Vec<&str> = db_path.trim_start_matches("//").split('/').collect();
+        if path_parts.len() >= 2 {
+            // Format as /Volumes/<server-name>/<share-name>/rest/of/path
+            let server = path_parts[0];
+            let share = path_parts[1];
+            let remaining_path = if path_parts.len() > 2 {
+                path_parts[2..].join("/")
+            } else {
+                String::new()
+            };
+            
+            let mounted_path = format!("/Volumes/{}/{}", share, remaining_path);
+            logger::info(&format!("Converted UNC path {} to mounted path: {}", db_path, mounted_path));
+            return PathBuf::from(mounted_path);
+        }
+    }
+    
+    // Fall back to the configured path
+    let path = PathBuf::from(db_path);
+    logger::info(&format!("Using network database path: {}", path.display()));
+    path
 }
 
 // Get the local database path (for local testing)
