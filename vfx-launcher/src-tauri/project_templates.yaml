@@ -1,0 +1,11 @@
+templates:
+- name: Standard Shot
+  description: Sequence and Shot folders
+  structure:
+  - sequences
+  - sequences/{sequence}/shots
+- name: Flat
+  description: Flat project structure
+  structure:
+  - assets
+  - renders

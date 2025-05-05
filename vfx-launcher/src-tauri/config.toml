@@ -1,0 +1,20 @@
+# VFX Launcher Network Configuration
+
+[network]
+# Server IP address (the machine running the application)
+server_ip = "192.168.100.9"
+server_port = 8080
+
+[database]
+# Database mode: "network" or "local"
+mode = "network"
+# Network database path (UNC format)
+network_path = "//192.168.100.9/Naboo/DB"
+# Windows mapped drive equivalent
+windows_drive = "U:"
+
+[paths]
+# Base network path for projects
+network_base = "//192.168.100.9/Naboo"
+# Windows mapped drive for network path
+windows_mapped_drive = "U:"
