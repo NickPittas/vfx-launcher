@@ -48,7 +48,7 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     }
     if (window.confirm(`Are you sure you want to delete ${project.name}?`)) {
       try {
-        await invoke('delete_project', { projectId: project.id });
+        await invoke('delete_project', { project_id: project.id });
         onDelete(project.id);
       } catch (err) {
         console.error('Failed to delete project:', err);

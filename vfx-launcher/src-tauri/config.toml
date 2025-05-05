@@ -2,19 +2,19 @@
 
 [network]
 # Server IP address (the machine running the application)
-server_ip = "192.168.100.9"
+server_ip = "127.0.0.1"
 server_port = 8080
 
 [database]
 # Database mode: "network" or "local"
 mode = "network"
-# Network database path (UNC format)
-network_path = "//192.168.100.9/Naboo/DB"
+# Network database path (UNC format) - using local path for testing
+network_path = "/tmp/vfx-naboo/DB"
 # Windows mapped drive equivalent
 windows_drive = "U:"
 
 [paths]
 # Base network path for projects
-network_base = "//192.168.100.9/Naboo"
+network_base = "/tmp/vfx-naboo"
 # Windows mapped drive for network path
 windows_mapped_drive = "U:"

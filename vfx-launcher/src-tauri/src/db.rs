@@ -23,13 +23,15 @@ pub fn get_connection() -> rusqlite::Result<Connection> {
             }
             
             // Set busy timeout to handle concurrent access
-            if let Err(e) = conn.execute("PRAGMA busy_timeout = 5000;", []) {
-                logger::warn(&format!("Failed to set busy_timeout pragma: {}", e));
+            match conn.query_row("PRAGMA busy_timeout = 5000;", [], |_| Ok(())) {
+                Ok(_) => logger::info("Set busy_timeout pragma successfully"),
+                Err(e) => logger::warn(&format!("Failed to set busy_timeout pragma: {}", e)),
             }
             
             // Use Write-Ahead Logging for better concurrency
-            if let Err(e) = conn.execute("PRAGMA journal_mode = WAL;", []) {
-                logger::warn(&format!("Failed to set journal_mode pragma: {}", e));
+            match conn.query_row("PRAGMA journal_mode = WAL;", [], |_| Ok(())) {
+                Ok(_) => logger::info("Set journal_mode pragma successfully"),
+                Err(e) => logger::warn(&format!("Failed to set journal_mode pragma: {}", e)),
             }
             
             Ok(conn)
@@ -218,11 +220,12 @@ pub fn add_project(name: String, path: String, client: Option<String>) -> Result
 
 #[tauri::command]
 pub fn delete_project(project_id: i64) -> Result<bool, String> {
-    logger::info("=== DELETE PROJECT OPERATION START ====");
+    logger::info("======== DELETE PROJECT OPERATION START ========");
     logger::info(&format!("Received delete request for project ID: {} (type: i64)", project_id));
+    logger::info(&format!("Debug: Parameter received as 'project_id' with value {}", project_id));
     
     // Get database connection
-    let conn = match get_connection() {
+    let mut conn = match get_connection() {
         Ok(c) => {
             logger::info("Database connection established");
             c
@@ -257,9 +260,20 @@ pub fn delete_project(project_id: i64) -> Result<bool, String> {
         return Err(err_msg);
     }
     
+    // Use a transaction to ensure atomicity
+    logger::info("Creating transaction for project deletion...");
+    let tx = match conn.transaction() {
+        Ok(tx) => tx,
+        Err(e) => {
+            let err_msg = format!("Failed to start transaction: {}", e.to_string());
+            logger::error(&err_msg);
+            return Err(err_msg);
+        }
+    };
+
     // Delete related records first
     logger::info("Deleting project files...");
-    match conn.execute(
+    match tx.execute(
         "DELETE FROM project_files WHERE project_id = ?",
         params![project_id],
     ) {
@@ -272,7 +286,7 @@ pub fn delete_project(project_id: i64) -> Result<bool, String> {
     };
     
     logger::info("Deleting recent projects entries...");
-    match conn.execute(
+    match tx.execute(
         "DELETE FROM recent_projects WHERE project_id = ?",
         params![project_id],
     ) {
@@ -280,12 +294,13 @@ pub fn delete_project(project_id: i64) -> Result<bool, String> {
         Err(e) => {
             let err_msg = format!("Failed to delete recent projects: {}", e.to_string());
             logger::error(&err_msg);
+            let _ = tx.rollback(); // Try to rollback on error
             return Err(err_msg);
         }
     };
     
     logger::info("Deleting user favorites entries...");
-    match conn.execute(
+    match tx.execute(
         "DELETE FROM user_favorites WHERE project_id = ?",
         params![project_id],
     ) {
@@ -293,13 +308,14 @@ pub fn delete_project(project_id: i64) -> Result<bool, String> {
         Err(e) => {
             let err_msg = format!("Failed to delete favorites: {}", e.to_string());
             logger::error(&err_msg);
+            let _ = tx.rollback(); // Try to rollback on error
             return Err(err_msg);
         }
     };
     
     // Finally delete the project itself
     logger::info("Deleting the project record...");
-    let rows = match conn.execute(
+    let rows = match tx.execute(
         "DELETE FROM projects WHERE id = ?",
         params![project_id],
     ) {
@@ -309,6 +325,18 @@ pub fn delete_project(project_id: i64) -> Result<bool, String> {
         },
         Err(e) => {
             let err_msg = format!("Failed to delete project: {}", e.to_string());
+            logger::error(&err_msg);
+            let _ = tx.rollback(); // Try to rollback on error
+            return Err(err_msg);
+        }
+    };
+    
+    // Commit the transaction
+    logger::info("Committing transaction...");
+    match tx.commit() {
+        Ok(_) => logger::info("Transaction committed successfully"),
+        Err(e) => {
+            let err_msg = format!("Failed to commit transaction: {}", e.to_string());
             logger::error(&err_msg);
             return Err(err_msg);
         }

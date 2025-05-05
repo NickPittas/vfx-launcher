@@ -446,7 +446,23 @@ fn store_files(project_id: i64, files: &[ProjectFile]) -> Result<(), String> {
         return Ok(());
     }
     
-    let mut conn = Connection::open("vfx_launcher.db").map_err(|e| e.to_string())?;
+    // Use the database path from the paths module for consistency across the application
+    let mut conn = crate::db::get_connection().map_err(|e| e.to_string())?;
+    
+    // First verify the project exists to avoid foreign key constraint errors
+    let project_exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM projects WHERE id = ?)",
+        params![project_id],
+        |row| row.get(0)
+    ).map_err(|e| format!("Failed to check if project exists: {}", e))?;
+    
+    if !project_exists {
+        let err_msg = format!("Project with ID {} does not exist. Cannot store files.", project_id);
+        logger::error(&err_msg);
+        return Err(err_msg);
+    }
+    
+    logger::info(&format!("Project {} exists, proceeding with file storage", project_id));
     
     // Begin transaction
     let tx = conn.transaction().map_err(|e| e.to_string())?;
