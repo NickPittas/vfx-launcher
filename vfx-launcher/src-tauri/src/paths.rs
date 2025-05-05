@@ -15,14 +15,27 @@ pub enum OsType {
 // Get the current operating system
 pub fn get_os_type() -> OsType {
     #[cfg(target_os = "windows")]
-    return OsType::Windows;
+    {
+        return OsType::Windows;
+    }
     
     #[cfg(target_os = "macos")]
-    return OsType::MacOS;
+    {
+        return OsType::MacOS;
+    }
     
     #[cfg(target_os = "linux")]
-    return OsType::Linux;
+    {
+        return OsType::Linux;
+    }
     
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        return OsType::Unknown;
+    }
+    
+    // This line is actually unreachable but needed to satisfy the compiler
+    // as it can't determine that the cfg attributes cover all cases
     OsType::Unknown
 }
 

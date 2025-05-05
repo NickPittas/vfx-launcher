@@ -1,5 +1,5 @@
 use serde::{Serialize, Deserialize};
-use rusqlite::{params, Connection};
+use rusqlite::params; // Removed unused Connection import
 use bcrypt::{hash, verify, DEFAULT_COST};
 use chrono::Utc;
 use crate::db;

@@ -8,7 +8,7 @@ interface FileEntryProps {
   fileType: string;
   folder: string;
   shotGroup: string;
-  versionKey: string;
+  // Removed unused versionKey property
   currentVersion: string;
   onVersionChange: (fileType: string, folder: string, shotGroup: string, name: string, version: string) => void;
   onOpenFile: (file: ProjectFile) => void;
@@ -20,7 +20,7 @@ const FileEntry: React.FC<FileEntryProps> = ({
   fileType, 
   folder, 
   shotGroup,
-  versionKey, 
+  // Removed unused versionKey parameter
   currentVersion, 
   onVersionChange, 
   onOpenFile 

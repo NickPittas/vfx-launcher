@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Delete Function Test</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #1e1e1e;
+      color: white;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      color: #ff5500;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .test-box {
+      background: #333;
+      border: 1px solid #555;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    input {
+      padding: 8px;
+      background: #222;
+      color: white;
+      border: 1px solid #666;
+      margin-right: 10px;
+      border-radius: 4px;
+    }
+    button {
+      padding: 8px 16px;
+      background: #ff5500;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 5px;
+    }
+    button.delete {
+      background: #ff0000;
+    }
+    button:hover {
+      opacity: 0.9;
+    }
+    #log {
+      background: #222;
+      padding: 10px;
+      height: 300px;
+      overflow: auto;
+      font-family: monospace;
+      border-radius: 4px;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Delete Function Test</h1>
+    
+    <div class="test-box">
+      <h2>Test Deletion</h2>
+      <div>
+        <input type="number" id="projectId" value="1" min="1" placeholder="Project ID">
+        <button id="testDelete" class="delete">DIRECT Delete Project</button>
+      </div>
+    </div>
+    
+    <h2>Log</h2>
+    <div id="log"></div>
+  </div>
+  
+  <script>
+    // Log helper function
+    function log(message, isError = false) {
+      const logElement = document.getElementById('log');
+      const timestamp = new Date().toISOString().substring(11, 19);
+      let formattedMessage = message;
+      
+      if (typeof message === 'object') {
+        formattedMessage = JSON.stringify(message, null, 2);
+      }
+      
+      const logLine = `[${timestamp}] ${formattedMessage}\n`;
+      logElement.innerHTML += isError ? `<span style="color: #ff5555">${logLine}</span>` : logLine;
+      logElement.scrollTop = logElement.scrollHeight;
+      
+      // Also log to console for extra visibility
+      if (isError) {
+        console.error(message);
+      } else {
+        console.log(message);
+      }
+    }
+    
+    // Clear log
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+    
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+      log('Page loaded, checking for Tauri...');
+      
+      // Test if we're running in Tauri
+      if (window.__TAURI__) {
+        log('✅ Tauri detected!');
+        
+        // Get the invoke function
+        const { invoke } = window.__TAURI__;
+        
+        // Setup event handlers
+        document.getElementById('testDelete').addEventListener('click', async () => {
+          const projectId = parseInt(document.getElementById('projectId').value);
+          
+          if (!projectId || isNaN(projectId)) {
+            log('⚠️ Please enter a valid project ID', true);
+            return;
+          }
+          
+          if (!confirm(`Are you ABSOLUTELY sure you want to delete project ID ${projectId}?\nThis cannot be undone!`)) {
+            log('Delete cancelled by user');
+            return;
+          }
+          
+          log(`🚨 ATTEMPTING TO DELETE PROJECT ID: ${projectId}`);
+          
+          try {
+            log(`Invoking emergency_delete_project with projectId: ${projectId}`);
+            const result = await invoke('emergency_delete_project', { projectId });
+            log(`✅ DELETE SUCCESS: ${result}`);
+          } catch (error) {
+            log(`❌ DELETE ERROR: ${error}`, true);
+          }
+        });
+      } else {
+        log('❌ Tauri NOT detected - this page must run within a Tauri app', true);
+      }
+    });
+  </script>
+</body>
+</html>

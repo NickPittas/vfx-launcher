@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use serde::{Serialize, Deserialize};
-use notify::{Watcher, RecursiveMode, Result as NotifyResult, Event, EventKind};
+use notify::{Watcher, RecursiveMode, EventKind}; // Removed unused imports
 use crate::files;
 
 // Store active watchers

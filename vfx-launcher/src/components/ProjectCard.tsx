@@ -13,6 +13,39 @@ interface ProjectCardProps {
   currentUserId?: number; // Needed to toggle favorites
 }
 
+// Simple and direct function to delete a project
+function directDelete(id: number, name: string) {
+  if (!id) {
+    alert('Error: Invalid project ID');
+    return;
+  }
+  
+  const confirmed = window.confirm(`Really delete project: ${name}?`);
+  if (!confirmed) return;
+  
+  console.log(`Deleting project ${id}...`);
+  alert(`Starting deletion of project ${id}...`);
+  
+  // Try basic API call first
+  invoke('debug_test')
+    .then(response => {
+      console.log('Debug test response:', response);
+      alert(`Debug test response: ${response}`);
+      
+      // If debug test works, try actual deletion
+      return invoke('remove_project', { project_id: id });
+    })
+    .then(result => {
+      console.log('Delete result:', result);
+      alert(`Project ${name} deleted successfully!`);
+      window.location.reload();
+    })
+    .catch(err => {
+      console.error('Delete error:', err);
+      alert(`Error: ${err}`);
+    });
+}
+
 const ProjectCard: React.FC<ProjectCardProps> = ({
   project,
   onDelete,
@@ -41,18 +74,27 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
     }
   };
 
-  const handleDeleteProject = async (e: React.MouseEvent) => {
+  const handleDelete = async (e: React.MouseEvent) => {
+    // IMMEDIATELY show alert to confirm the button is working
+    alert(`DELETE DEBUG: Button clicked for project: ${project.name} (ID: ${project.id})`);
+    
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
-    if (window.confirm(`Are you sure you want to delete ${project.name}?`)) {
+    
+    // Simple confirmation dialog
+    if (window.confirm(`Are you sure you want to delete project: ${project.name}?`)) {
       try {
-        await invoke('delete_project', { project_id: project.id });
+        console.log(`Attempting to delete project ID: ${project.id}`);
+        // Use our new simpler remove_project function
+        const result = await invoke('remove_project', { project_id: project.id });
+        console.log(`Delete result:`, result);
+        alert(`Project ${project.name} deleted successfully!`);
         onDelete(project.id);
       } catch (err) {
         console.error('Failed to delete project:', err);
-        alert(`Failed to delete project: ${err}`);
+        alert(`Error deleting project: ${err}`);
       }
     }
   };
@@ -111,13 +153,37 @@ const ProjectCard: React.FC<ProjectCardProps> = ({
               </Badge>
             )}
             <div className="flex mt-2 space-x-2">
+              {/* Original delete button */}
               <Button 
                 variant="danger" 
                 size="small"
-                onClick={handleDeleteProject}
+                onClick={(e) => {
+                  console.log('ProjectCard delete button clicked!');
+                  alert('ProjectCard delete button clicked!');
+                  handleDelete(e);
+                }}
+                style={{ border: '3px solid lime', padding: '2px 8px' }}
               >
-                Delete
+                Delete 🛑
               </Button>
+              
+              {/* Emergency debug button that bypasses normal flow */}
+              <button 
+                style={{ 
+                  marginTop: '5px', 
+                  background: 'red', 
+                  color: 'white', 
+                  padding: '3px 8px', 
+                  border: '1px solid darkred',
+                  borderRadius: '4px'
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  directDelete(project.id, project.name);
+                }}
+              >
+                EMERGENCY DELETE
+              </button>
             </div>
           </div>
         </div>

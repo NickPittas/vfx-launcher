@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>VFX Launcher Delete Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #333;
+            color: white;
+        }
+        button {
+            background-color: #ff3333;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 10px 0;
+            cursor: pointer;
+            font-weight: bold;
+            border-radius: 4px;
+        }
+        h1 {
+            color: #ff9900;
+        }
+        .results {
+            background-color: #444;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>VFX Launcher Delete Test</h1>
+    <p>This is a simple test page to verify the delete functionality is working.</p>
+    
+    <div>
+        <label for="project-id">Project ID to delete:</label>
+        <input type="number" id="project-id" value="1" min="1" style="padding: 5px; margin: 0 10px;">
+    </div>
+    
+    <button id="test-debug">1. Test Debug Command</button>
+    <button id="delete-project">2. Delete Project</button>
+    
+    <h2>Results:</h2>
+    <div id="results" class="results">No results yet</div>
+    
+    <script>
+        // Import the Tauri API
+        const { invoke } = window.__TAURI__;
+        
+        document.getElementById('test-debug').addEventListener('click', async () => {
+            try {
+                const result = await invoke('debug_test');
+                document.getElementById('results').textContent = `Debug command result: ${result}`;
+            } catch (err) {
+                document.getElementById('results').textContent = `ERROR: ${err}`;
+            }
+        });
+        
+        document.getElementById('delete-project').addEventListener('click', async () => {
+            const projectId = parseInt(document.getElementById('project-id').value, 10);
+            if (isNaN(projectId) || projectId < 1) {
+                document.getElementById('results').textContent = 'Invalid project ID';
+                return;
+            }
+            
+            try {
+                document.getElementById('results').textContent = `Attempting to delete project ID: ${projectId}...`;
+                
+                const result = await invoke('remove_project', { project_id: projectId });
+                
+                document.getElementById('results').textContent += `\nDelete result: ${result}`;
+            } catch (err) {
+                document.getElementById('results').textContent += `\nERROR: ${err}`;
+            }
+        });
+    </script>
+</body>
+</html>

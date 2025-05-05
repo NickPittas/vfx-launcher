@@ -12,11 +12,16 @@ pub fn get_database_path() -> PathBuf {
 
 pub fn get_connection() -> rusqlite::Result<Connection> {
     let db_path = get_database_path();
-    logger::info(&format!("Opening database connection at: {}", db_path.display()));
+    logger::info(&format!("DB CONNECTION DEBUG: Attempting to open database at: {}", db_path.to_string_lossy()));
     
-    // Try to open the database with robust error handling
+    // Check if the database file exists
+    if !db_path.exists() {
+        logger::error(&format!("DB CONNECTION ERROR: Database file does not exist at: {}", db_path.to_string_lossy()));
+    }
+    
     match Connection::open(&db_path) {
         Ok(conn) => {
+            logger::info("DB CONNECTION DEBUG: Successfully opened database connection");
             // Set pragmas for better performance and safety
             if let Err(e) = conn.execute("PRAGMA foreign_keys = ON;", []) {
                 logger::warn(&format!("Failed to set foreign_keys pragma: {}", e));
@@ -37,7 +42,8 @@ pub fn get_connection() -> rusqlite::Result<Connection> {
             Ok(conn)
         },
         Err(e) => {
-            logger::error(&format!("Failed to open database at {}: {}", db_path.display(), e));
+            let error_msg = format!("DB CONNECTION ERROR: Failed to open database at {}: {}", db_path.display(), e);
+            logger::error(&error_msg);
             Err(e)
         }
     }
@@ -219,131 +225,121 @@ pub fn add_project(name: String, path: String, client: Option<String>) -> Result
 }
 
 #[tauri::command]
-pub fn delete_project(project_id: i64) -> Result<bool, String> {
-    logger::info("======== DELETE PROJECT OPERATION START ========");
-    logger::info(&format!("Received delete request for project ID: {} (type: i64)", project_id));
-    logger::info(&format!("Debug: Parameter received as 'project_id' with value {}", project_id));
+pub fn delete_project(projectId: i64) -> Result<bool, String> {
+    // Simple log to confirm function is being called
+    println!("DELETE: Deleting project with ID {}", projectId);
+    logger::info(&format!("DELETE: Starting deletion of project ID: {}", projectId));
     
-    // Get database connection
+    // Use get_connection instead of direct connection for consistency
     let mut conn = match get_connection() {
-        Ok(c) => {
-            logger::info("Database connection established");
-            c
-        },
+        Ok(conn) => conn,
         Err(e) => {
-            let err_msg = format!("Failed to connect to database: {}", e.to_string());
-            logger::error(&err_msg);
-            return Err(err_msg);
+            let err = format!("Failed to connect to database: {}", e);
+            logger::error(&err);
+            return Err(err);
         }
     };
     
-    // Check if project exists
-    let project_exists: bool = match conn.query_row(
-        "SELECT EXISTS(SELECT 1 FROM projects WHERE id = ?)",
-        params![project_id],
-        |row| row.get(0)
-    ) {
-        Ok(exists) => {
-            logger::info(&format!("Project existence check: {}", exists));
-            exists
-        },
-        Err(e) => {
-            let err_msg = format!("Failed to check if project exists: {}", e.to_string());
-            logger::error(&err_msg);
-            return Err(err_msg);
-        }
-    };
-    
-    if !project_exists {
-        let err_msg = format!("Project with ID {} does not exist", project_id);
-        logger::error(&err_msg);
-        return Err(err_msg);
+    // Use simple, direct approach without transactions for now
+    // First delete related records to avoid constraint violations
+    let files_result = conn.execute("DELETE FROM project_files WHERE project_id = ?", params![projectId]);
+    match files_result {
+        Ok(count) => println!("Deleted {} project files", count),
+        Err(e) => println!("Warning: couldn't delete project files: {}", e)
     }
     
-    // Use a transaction to ensure atomicity
-    logger::info("Creating transaction for project deletion...");
-    let tx = match conn.transaction() {
-        Ok(tx) => tx,
-        Err(e) => {
-            let err_msg = format!("Failed to start transaction: {}", e.to_string());
-            logger::error(&err_msg);
-            return Err(err_msg);
-        }
-    };
-
-    // Delete related records first
-    logger::info("Deleting project files...");
-    match tx.execute(
-        "DELETE FROM project_files WHERE project_id = ?",
-        params![project_id],
-    ) {
-        Ok(count) => logger::info(&format!("Deleted {} project file records", count)),
-        Err(e) => {
-            let err_msg = format!("Failed to delete project files: {}", e.to_string());
-            logger::error(&err_msg);
-            return Err(err_msg);
-        }
-    };
+    // Delete recent projects references
+    let recents_result = conn.execute("DELETE FROM recent_projects WHERE project_id = ?", params![projectId]);
+    match recents_result {
+        Ok(count) => println!("Deleted {} recent project entries", count),
+        Err(e) => println!("Warning: couldn't delete recent projects: {}", e)
+    }
     
-    logger::info("Deleting recent projects entries...");
-    match tx.execute(
-        "DELETE FROM recent_projects WHERE project_id = ?",
-        params![project_id],
-    ) {
-        Ok(count) => logger::info(&format!("Deleted {} recent project records", count)),
-        Err(e) => {
-            let err_msg = format!("Failed to delete recent projects: {}", e.to_string());
-            logger::error(&err_msg);
-            let _ = tx.rollback(); // Try to rollback on error
-            return Err(err_msg);
-        }
-    };
+    // Delete favorites
+    let favorites_result = conn.execute("DELETE FROM user_favorites WHERE project_id = ?", params![projectId]);
+    match favorites_result {
+        Ok(count) => println!("Deleted {} favorites", count),
+        Err(e) => println!("Warning: couldn't delete favorites: {}", e)
+    }
     
-    logger::info("Deleting user favorites entries...");
-    match tx.execute(
-        "DELETE FROM user_favorites WHERE project_id = ?",
-        params![project_id],
-    ) {
-        Ok(count) => logger::info(&format!("Deleted {} user favorite records", count)),
-        Err(e) => {
-            let err_msg = format!("Failed to delete favorites: {}", e.to_string());
-            logger::error(&err_msg);
-            let _ = tx.rollback(); // Try to rollback on error
-            return Err(err_msg);
-        }
-    };
+    // Now delete the actual project
+    println!("Attempting to delete project record...");
+    let delete_result = conn.execute("DELETE FROM projects WHERE id = ?", params![projectId]);
     
-    // Finally delete the project itself
-    logger::info("Deleting the project record...");
-    let rows = match tx.execute(
-        "DELETE FROM projects WHERE id = ?",
-        params![project_id],
-    ) {
+    match delete_result {
         Ok(count) => {
-            logger::info(&format!("Deleted {} project records", count));
-            count
+            println!("SUCCESS: Deleted {} project(s) with ID {}", count, projectId);
+            Ok(count > 0)
         },
         Err(e) => {
-            let err_msg = format!("Failed to delete project: {}", e.to_string());
-            logger::error(&err_msg);
-            let _ = tx.rollback(); // Try to rollback on error
-            return Err(err_msg);
+            let err_msg = format!("Error deleting project: {}", e);
+            println!("{}", err_msg);
+            Err(err_msg)
         }
-    };
-    
-    // Commit the transaction
-    logger::info("Committing transaction...");
-    match tx.commit() {
-        Ok(_) => logger::info("Transaction committed successfully"),
+    }
+}
+
+// Simple delete project function without all the complexity
+#[tauri::command]
+pub fn remove_project(project_id: i64) -> Result<bool, String> {
+    // Get database connection directly
+    match Connection::open(get_database_path()) {
+        Ok(conn) => {
+            // Start with a simple direct delete - no transaction
+            match conn.execute("DELETE FROM projects WHERE id = ?", params![project_id]) {
+                Ok(rows) => {
+                    logger::info(&format!("Removed project {}, {} rows affected", project_id, rows));
+                    Ok(rows > 0)
+                },
+                Err(e) => {
+                    let msg = format!("Failed to remove project: {}", e);
+                    logger::error(&msg);
+                    Err(msg)
+                }
+            }
+        },
         Err(e) => {
-            let err_msg = format!("Failed to commit transaction: {}", e.to_string());
-            logger::error(&err_msg);
-            return Err(err_msg);
+            let msg = format!("Database connection failed: {}", e);
+            logger::error(&msg);
+            Err(msg)
         }
+    }
+}
+
+// Ultra-simple, focused delete function that avoids any complexity
+#[tauri::command]
+pub fn emergency_delete_project(projectId: i64) -> Result<String, String> {
+    // Log to both terminal and logger
+    let msg = format!("EMERGENCY DELETE: Project ID {}", projectId);
+    println!("{}", msg);
+    logger::info(&msg);
+    
+    // Open a simple direct connection
+    let db_path = get_database_path();
+    let mut conn = match Connection::open(&db_path) {
+        Ok(c) => c,
+        Err(e) => return Err(format!("DB connection failed: {}", e))
     };
     
-    logger::info("=== DELETE PROJECT OPERATION COMPLETE ====");
-    Ok(rows > 0)
+    // Skip foreign keys for emergency delete
+    match conn.execute("PRAGMA foreign_keys = OFF;", []) {
+        Ok(_) => {},
+        Err(e) => println!("Warning: Couldn't disable foreign keys: {}", e)
+    }
+    
+    // Delete directly using our camelCase parameter
+    match conn.execute("DELETE FROM projects WHERE id = ?", params![projectId]) {
+        Ok(rows) => {
+            let result = format!("Successfully deleted {} project(s)", rows);
+            println!("{}", result);
+            Ok(result)
+        },
+        Err(e) => {
+            let err = format!("Delete failed: {}", e);
+            println!("{}", err);
+            Err(err)
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]

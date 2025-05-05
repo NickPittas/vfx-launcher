@@ -1,6 +1,7 @@
 import React from 'react';
 import { Project } from '../../types/project';
 import Button from '../Button';
+import { invoke } from '@tauri-apps/api/core'; // Add import for invoke
 
 interface ProjectsListProps {
   projects: Project[];
@@ -64,20 +65,27 @@ const ProjectsList: React.FC<ProjectsListProps> = ({
           className="flex-1 flex items-center justify-center py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors duration-150"
         >
           <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-            <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 11-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
+            <path fillRule="evenodd" d="M10 5a1 1 0 011 1v3h3a1 1 0 110 2h-3v3a1 1 0 01-2 0v-3H6a1 1 0 110-2h3V6a1 1 0 011-1z" clipRule="evenodd" />
           </svg>
           Add
         </button>
         
         <button
           disabled={!selectedProject}
-          onClick={() => selectedProject && onDeleteProject(selectedProject.id)}
+          onClick={() => {
+            const message = `[ProjectsList] Delete button clicked. Current selectedProject ID: ${selectedProject ? selectedProject.id : 'null'}`;
+            console.log(message); // Keep browser console log
+            invoke('log_to_terminal', { message }); // Send log to backend/terminal
+            
+            // Call the original prop
+            onDeleteProject(selectedProject ? selectedProject.id : -1); 
+          }}
           className="flex-1 py-1.5 flex items-center justify-center bg-red-600 hover:bg-red-700 disabled:bg-red-900/50 disabled:cursor-not-allowed text-white rounded-md transition-colors duration-150"
         >
           <svg className="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
             <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
           </svg>
-          Delete
+          Delete Project 
         </button>
       </div>
       

@@ -8,13 +8,13 @@ server_port = 8080
 [database]
 # Database mode: "network" or "local"
 mode = "network"
-# Network database path (UNC format) - using local path for testing
-network_path = "/tmp/vfx-naboo/DB"
+# Network database path - using the mounted volume
+network_path = "/Volumes/Naboo/DB"
 # Windows mapped drive equivalent
 windows_drive = "U:"
 
 [paths]
-# Base network path for projects
-network_base = "/tmp/vfx-naboo"
+# Base network path for projects - using the mounted volume
+network_base = "/Volumes/Naboo"
 # Windows mapped drive for network path
 windows_mapped_drive = "U:"

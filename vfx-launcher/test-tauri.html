@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tauri Basic Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 20px;
+      background: #222;
+      color: white;
+    }
+    button {
+      padding: 10px;
+      margin: 5px;
+      background: #444;
+      color: white;
+      border: 1px solid #666;
+      cursor: pointer;
+    }
+    .log {
+      background: #333;
+      padding: 10px;
+      border: 1px solid #555;
+      margin-top: 20px;
+      height: 300px;
+      overflow: auto;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tauri Basic Test</h1>
+  
+  <div>
+    <button id="testDebug">Test Debug Command</button>
+    <button id="testDelete">Test Delete Project</button>
+    <button id="testEmergencyDelete">Test Emergency Delete</button>
+  </div>
+  
+  <div class="log" id="log"></div>
+  
+  <script>
+    // Log function
+    function log(message) {
+      const logElement = document.getElementById('log');
+      const line = typeof message === 'object' 
+        ? JSON.stringify(message, null, 2) 
+        : message.toString();
+      
+      logElement.innerHTML += line + '\n';
+      logElement.scrollTop = logElement.scrollHeight;
+    }
+    
+    // Check if Tauri is available
+    window.addEventListener('DOMContentLoaded', () => {
+      log('Page loaded');
+      
+      if (window.__TAURI__) {
+        log('✅ Tauri detected');
+        
+        // Get the invoke function
+        const { invoke } = window.__TAURI__;
+        
+        // Debug test
+        document.getElementById('testDebug').addEventListener('click', async () => {
+          log('📤 Calling debug_test...');
+          try {
+            const response = await invoke('debug_test');
+            log(`📥 Debug response: ${response}`);
+          } catch (error) {
+            log(`❌ ERROR: ${error}`);
+          }
+        });
+        
+        // Delete test
+        document.getElementById('testDelete').addEventListener('click', async () => {
+          log('📤 Calling delete_project...');
+          try {
+            const response = await invoke('delete_project', { project_id: 1 });
+            log(`📥 Delete response: ${response}`);
+          } catch (error) {
+            log(`❌ ERROR: ${error}`);
+          }
+        });
+        
+        // Emergency delete test
+        document.getElementById('testEmergencyDelete').addEventListener('click', async () => {
+          log('📤 Calling emergency_delete_project...');
+          try {
+            const response = await invoke('emergency_delete_project', { project_id: 1 });
+            log(`📥 Emergency delete response: ${response}`);
+          } catch (error) {
+            log(`❌ ERROR: ${error}`);
+          }
+        });
+      } else {
+        log('❌ Tauri not detected - this must be opened with tauri dev or build');
+      }
+    });
+  </script>
+</body>
+</html>

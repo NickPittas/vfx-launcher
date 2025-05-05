@@ -9,7 +9,7 @@ import { AppSettings } from '../types/settings';
 import Button from '../components/Button';
 import Card from '../components/Card';
 import { formatDistanceToNow } from 'date-fns';
-import toast from 'react-hot-toast';
+// Removed unused toast import
 
 const ProjectDetailPage: React.FC = () => {
   const { projectId } = useParams<{ projectId: string }>();
@@ -109,7 +109,7 @@ const ProjectDetailPage: React.FC = () => {
       
       // Determine which application to use
       let appPath = '';
-      if (file.file_type === 'nuke' && settings.nuke_executable_path) {
+      if (file.file_type === 'nk' && settings.nuke_executable_path) {
         appPath = settings.nuke_executable_path;
         await invoke('open_file', { app_path: appPath, file_path: file.path });
       } else if (file.file_type === 'aep' && settings.ae_executable_path) {

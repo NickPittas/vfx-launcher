@@ -3,12 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
-import { formatDistanceToNow } from 'date-fns';
 
 // Import types
 import { Project } from '../types/project';
 import { ProjectFile } from '../types/projectFile';
 import { AppSettings } from '../types/settings';
+
+// Type for grouped files
+type GroupedFiles = {
+  nk: Record<string, Record<string, Record<string, ProjectFile[]>>>;
+  aep: Record<string, Record<string, Record<string, ProjectFile[]>>>;
+  other: Record<string, Record<string, Record<string, ProjectFile[]>>>;
+};
 
 // Import components
 import ProjectsList from '../components/projects/ProjectsList';
@@ -37,23 +43,36 @@ const ProjectsPage: React.FC = () => {
   const [showAep, setShowAep] = useState<boolean>(true);
   const [versions, setVersions] = useState<Record<string,string>>({});
   const [expanded, setExpanded] = useState<Record<string,boolean>>({});
+  
+  // Delete confirmation dialog state
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState<boolean>(false);
+  const [projectToDelete, setProjectToDelete] = useState<number | null>(null);
 
-  // Fetch projects
+  // Fetch projects function (defined inside component to access state)
   const loadProjects = async () => {
     setLoadingProjects(true);
     setProjError(null);
     try {
       const ps: Project[] = await invoke('get_projects', { userId: user?.id });
       setProjects(ps);
-      if (ps.length && !selectedProject) setSelectedProject(ps[0]);
-    } catch {
+      // Automatically select the first project if none is selected or the selected one was deleted
+      if (ps.length && (!selectedProject || !ps.find(p => p.id === selectedProject.id))) {
+        setSelectedProject(ps[0]);
+      } 
+      // If the selected project was deleted and there are no projects left, set selected to null
+      else if (!ps.length && selectedProject) { // Only update if selectedProject exists
+        setSelectedProject(null);
+      }
+    } catch (err) {
+      console.error('Failed to load projects:', err);
       setProjError('Failed to load projects');
+      toast.error('Failed to load projects.');
     } finally {
       setLoadingProjects(false);
     }
   };
 
-  useEffect(() => { loadProjects(); }, [user]);
+  useEffect(() => { loadProjects(); }, [user]); // Initial load
 
   // Fetch files when project changes - only load from DB, don't scan
   const loadFiles = async () => {
@@ -95,11 +114,11 @@ const ProjectsPage: React.FC = () => {
   useEffect(() => { loadFiles(); }, [selectedProject]);
 
   // Group files by type -> folder -> shot group -> name
-  const grouped = useMemo(() => {
-    const byType: Record<string,Record<string,Record<string,Record<string,ProjectFile[]>>>> = { 
-      nk: {}, 
-      aep: {}, 
-      other: {} 
+  const grouped = useMemo<GroupedFiles>(() => {
+    const byType: GroupedFiles = {
+      nk: {},
+      aep: {},
+      other: {}
     };
     
     files.forEach(f => {
@@ -157,29 +176,78 @@ const ProjectsPage: React.FC = () => {
   const toggleFolder = (key:string) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
 
   // Project actions
-  const deleteProject = async (id:number) => {
-    if (!window.confirm('Are you sure you want to delete this project?')) {
+  // This step has been integrated into the deleteProject function
+  
+  // The function called by the delete button - shows the confirmation UI
+  const deleteProject = (id: number) => {
+    const startMessage = `[ProjectsPage] deleteProject started for ID: ${id}`;
+    console.log(startMessage);
+    invoke('log_to_terminal', { message: startMessage });
+    
+    // Set the project to delete and show the confirmation dialog
+    setProjectToDelete(id);
+    setConfirmDialogOpen(true);
+  };
+  
+  // Handle actual deletion when user confirms
+  const handleConfirmDelete = async () => {
+    // Ensure we have a project ID to delete
+    if (projectToDelete === null) {
+      console.error('No project ID set for deletion');
       return;
     }
     
+    const id = projectToDelete;
+    const toastId = toast.loading('Deleting project...');
+    
     try {
-      await invoke('delete_project', { project_id: id });
+      const invokingMessage = `[ProjectsPage] Invoking 'emergency_delete_project' for ID: ${id}`;
+      console.log(invokingMessage);
+      await invoke('log_to_terminal', { message: invokingMessage });
+
+      await invoke('emergency_delete_project', { projectId: id });
       
-      setSelectedProject(null);
-      setFiles([]);
-      refreshProjects();
+      const successMessage = `[ProjectsPage] Successfully deleted project ID: ${id}. Refreshing list.`;
+      console.log(successMessage);
+      await invoke('log_to_terminal', { message: successMessage });
       
+      toast.dismiss(toastId);
       toast.success('Project deleted successfully');
+      
+      // Clear dialog state
+      setConfirmDialogOpen(false);
+      setProjectToDelete(null);
+      
+      // Refresh UI
+      await loadProjects();
+
     } catch (error) {
-      console.error('Error deleting project:', error);
-      toast.error(`Delete failed: ${error}`);
+      const errorMessage = `DELETE ERROR: Failed to delete project ID ${id}: ${error}`;
+      console.error(errorMessage);
+      await invoke('log_to_terminal', { message: `ERROR: ${errorMessage}` });
+      
+      toast.dismiss(toastId);
+      
+      // Provide a specific error message
+      const errorMessageToDisplay = error instanceof Error ? error.message : String(error);
+      toast.error(`Delete failed: ${errorMessageToDisplay}`);
+      
+      // Clear dialog
+      setConfirmDialogOpen(false);
+      setProjectToDelete(null);
     }
   };
+  
+  // Cancel delete operation
+  const handleCancelDelete = () => {
+    console.log(`[ProjectsPage] Delete cancelled for project ID: ${projectToDelete}`);
+    invoke('log_to_terminal', { message: `[ProjectsPage] Delete cancelled for project ID: ${projectToDelete}` });
+    setConfirmDialogOpen(false);
+    setProjectToDelete(null);
+  };
 
-  // on project refresh, reload projects and files
-  const refreshProjects = async () => { 
-    await loadProjects(); 
-    if (selectedProject) await loadFiles(); 
+  const addProject = () => {
+    navigate('/add-project');
   };
 
   // Refresh files for current project
@@ -190,16 +258,13 @@ const ProjectsPage: React.FC = () => {
     setFileError(null);
     
     try {
-      // Get project details to get path and any existing settings
       const project = await invoke<Project>('get_project_details', { projectId: selectedProject.id });
       
-      // This time we want to force a scan
-      // The scan_project command requires more parameters than scan_project_files
       await invoke('scan_project', { 
         projectId: selectedProject.id,
         projectPath: project.path,
-        includePatterns: ["\\.nk$", "\\.aep$"], // Find Nuke and AE files
-        scanDirs: [] // Empty array means scan all directories
+        includePatterns: ["\\.nk$", "\\.aep$"], 
+        scanDirs: [] 
       });
       
       await loadFiles();
@@ -216,47 +281,32 @@ const ProjectsPage: React.FC = () => {
   // Open a file using appropriate application
   const handleOpenFile = async (file: ProjectFile) => {
     try {
-      // First fetch application settings to get the executable paths
-      console.log('Fetching settings for file:', file.filename);
       const settings = await invoke<AppSettings>('get_settings');
-      console.log('Settings retrieved:', settings);
       
       let appPath = '';
       
-      // Determine which executable path to use based on the file type
       if (file.file_type === 'nk') {
         appPath = settings.nuke_executable_path || '';
-        console.log('Using Nuke path:', appPath);
         if (!appPath) {
           throw new Error('Nuke executable path is not set in settings');
         }
       } else if (file.file_type === 'aep') {
         appPath = settings.ae_executable_path || '';
-        console.log('Using After Effects path:', appPath);
         if (!appPath) {
           throw new Error('After Effects executable path is not set in settings');
         }
       } else {
-        throw new Error(`Unsupported file type: ${file.file_type}`);
+        // Don't attempt to open unsupported types
+        toast.error(`Cannot open unsupported file type: ${file.file_type}`);
+        return;
       }
       
-      // Now call the open_file command with the correct camelCase parameter names for Tauri
-      console.log('Calling open_file with parameters:', {
-        filePath: file.path,
-        appPath: appPath
-      });
-      
-      // CRITICAL: Use camelCase parameter names when calling Tauri commands from JavaScript
       await invoke('open_file', {
         filePath: file.path,
         appPath: appPath
       });
       
-      console.log('File opening command executed successfully');
-      
-      // Record activity
       try {
-        console.log('Logging activity...');
         await invoke('log_activity', {
           user_id: user?.id, 
           activity_type: 'open_file', 
@@ -265,7 +315,6 @@ const ProjectsPage: React.FC = () => {
           details: `Opened ${file.filename}`
         });
       } catch (activityError) {
-        // Don't fail the whole operation if activity logging fails
         console.error('Failed to log activity:', activityError);
       }
       
@@ -278,6 +327,34 @@ const ProjectsPage: React.FC = () => {
 
   return (
     <div className="flex flex-col h-screen bg-gray-900 text-gray-100">
+      {/* Delete Confirmation Dialog */}
+      {confirmDialogOpen && projectToDelete && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-gray-800 rounded-lg p-6 max-w-md mx-auto shadow-xl border border-gray-600">
+            <h3 className="text-xl font-semibold text-red-500 mb-2">Confirm Delete</h3>
+            <div className="my-4 text-white">
+              Are you sure you want to delete this project?
+              <br /><br />
+              <span className="font-bold">This action cannot be undone.</span>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={handleCancelDelete}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <div className="flex flex-grow overflow-hidden">
         {/* Project Sidebar */}
         <ProjectsList
@@ -288,7 +365,7 @@ const ProjectsPage: React.FC = () => {
           selectedProject={selectedProject}
           onProjectSelect={setSelectedProject}
           onFilterChange={setProjFilter}
-          onAddProject={() => navigate('/add-project')}
+          onAddProject={addProject}
           onDeleteProject={deleteProject}
         />
         

@@ -14,6 +14,18 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+#[tauri::command]
+fn debug_test() -> String {
+    println!("Debug test command was called!");
+    String::from("Debug test successful")
+}
+
+// NEW Command to print messages from frontend to terminal
+#[tauri::command]
+fn log_to_terminal(message: String) {
+    println!("FRONTEND_LOG: {}", message);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Initialize logger first
@@ -62,13 +74,18 @@ pub fn run() {
         logger::info("Users initialized successfully");
     }
     tauri::Builder::default()
+        // Removed dialog plugin to fix build issues
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
             greet,
+            debug_test,
+            log_to_terminal, // Register the new command
             db::get_projects,
             db::add_project,
             db::delete_project,
+            db::remove_project,
+            db::emergency_delete_project,
             db::get_project_details,
             db::get_project_files,
             db::get_settings,

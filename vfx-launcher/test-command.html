@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Tauri Command Test</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #1e1e1e;
+      color: #eee;
+      padding: 20px;
+    }
+    h1 {
+      color: #ff5500;
+    }
+    button {
+      background: #333;
+      color: white;
+      border: 1px solid #555;
+      padding: 8px 16px;
+      margin: 5px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #444;
+    }
+    #output {
+      background: #222;
+      border: 1px solid #444;
+      padding: 10px;
+      margin-top: 20px;
+      min-height: 200px;
+      white-space: pre-wrap;
+      font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+  <h1>Tauri Command Tester</h1>
+  
+  <p>Use these buttons to test the direct communication with the Rust backend:</p>
+  
+  <div>
+    <button id="debug-test">Debug Test (Simple String)</button>
+    <button id="test-delete-project-1">Delete Project 1</button>
+    <button id="test-delete-project-2">Delete Project 2</button>
+    <button id="test-delete-project-3">Delete Project 3</button>
+    <button id="test-emergency-delete-1">Emergency Delete 1</button>
+  </div>
+  
+  <div id="output">Output will appear here...</div>
+  
+  <script>
+    // Helper function to log output
+    function log(message) {
+      const output = document.getElementById('output');
+      const timestamp = new Date().toISOString().slice(11, 19);
+      
+      if (typeof message === 'object') {
+        message = JSON.stringify(message, null, 2);
+      }
+      
+      output.textContent += `[${timestamp}] ${message}\n`;
+      output.scrollTop = output.scrollHeight;
+      
+      // Also log to console for developer view
+      console.log(`[${timestamp}] ${message}`);
+    }
+    
+    // Clear the output
+    function clearOutput() {
+      document.getElementById('output').textContent = '';
+    }
+    
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      log('Page loaded');
+      
+      // Check if we're in a Tauri environment
+      if (window.__TAURI__) {
+        log('✅ Tauri environment detected');
+        
+        // Get the invoke function
+        try {
+          const { invoke } = window.__TAURI__;
+          log('✅ Tauri invoke function available');
+          
+          // Debug test
+          document.getElementById('debug-test').addEventListener('click', async () => {
+            clearOutput();
+            log('📤 Calling debug_test...');
+            
+            try {
+              const result = await invoke('debug_test');
+              log(`📥 Result: ${result}`);
+            } catch (error) {
+              log(`❌ Error: ${error}`);
+            }
+          });
+          
+          // Delete Project 1
+          document.getElementById('test-delete-project-1').addEventListener('click', async () => {
+            clearOutput();
+            log('📤 Calling delete_project with ID=1...');
+            
+            try {
+              const result = await invoke('delete_project', { project_id: 1 });
+              log(`📥 Result: ${result}`);
+            } catch (error) {
+              log(`❌ Error: ${error}`);
+            }
+          });
+          
+          // Delete Project 2
+          document.getElementById('test-delete-project-2').addEventListener('click', async () => {
+            clearOutput();
+            log('📤 Calling delete_project with ID=2...');
+            
+            try {
+              const result = await invoke('delete_project', { project_id: 2 });
+              log(`📥 Result: ${result}`);
+            } catch (error) {
+              log(`❌ Error: ${error}`);
+            }
+          });
+          
+          // Delete Project 3
+          document.getElementById('test-delete-project-3').addEventListener('click', async () => {
+            clearOutput();
+            log('📤 Calling delete_project with ID=3...');
+            
+            try {
+              const result = await invoke('delete_project', { project_id: 3 });
+              log(`📥 Result: ${result}`);
+            } catch (error) {
+              log(`❌ Error: ${error}`);
+            }
+          });
+          
+          // Emergency Delete 1
+          document.getElementById('test-emergency-delete-1').addEventListener('click', async () => {
+            clearOutput();
+            log('📤 Calling emergency_delete_project with ID=1...');
+            
+            try {
+              const result = await invoke('emergency_delete_project', { project_id: 1 });
+              log(`📥 Result: ${result}`);
+            } catch (error) {
+              log(`❌ Error: ${error}`);
+            }
+          });
+          
+        } catch (error) {
+          log(`❌ Error getting Tauri invoke: ${error}`);
+        }
+      } else {
+        log('❌ Not running in a Tauri environment! This page must be opened within a Tauri application.');
+      }
+    });
+  </script>
+</body>
+</html>

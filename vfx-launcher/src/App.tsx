@@ -5,6 +5,7 @@ import {
   Navigate,
   Outlet
 } from 'react-router-dom';
+// No longer need this import as EmergencyDelete handles invoke
 import Layout from './components/Layout'; 
 import LoginPage from './pages/LoginPage'; 
 import ProjectsPage from './pages/ProjectsPage'; 

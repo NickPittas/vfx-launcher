@@ -81,7 +81,7 @@ const ShotGroup: React.FC<ShotGroupProps> = ({
                 fileType={fileType}
                 folder={folder}
                 shotGroup={shotGroup}
-                versionKey={versionKey}
+                // versionKey prop removed as it's not used in FileEntry component
                 currentVersion={versions[versionKey] || (fileArr[0] && fileArr[0].version) || ''}
                 onVersionChange={onVersionChange}
                 onOpenFile={onOpenFile}

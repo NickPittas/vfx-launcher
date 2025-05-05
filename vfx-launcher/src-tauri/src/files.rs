@@ -5,7 +5,7 @@ use crate::db::ProjectFile;
 use crate::logger;
 use crate::paths;
 use chrono::Utc;
-use rusqlite::{params, Connection};
+use rusqlite::params; // Removed unused Connection import
 use regex::Regex;
 
 // Scan project directory for files
@@ -375,12 +375,13 @@ fn walk_dir(
                             relative_path,
                             parent_folder,
                             shot_name,
-                            last_modified: chrono::NaiveDateTime::from_timestamp_opt(
+                            last_modified: chrono::DateTime::from_timestamp(
                                 modified.duration_since(SystemTime::UNIX_EPOCH)
                                     .map(|d| d.as_secs() as i64)
                                     .unwrap_or(0), 0
                             )
-                            .unwrap_or_else(|| chrono::NaiveDateTime::from_timestamp_opt(0, 0).unwrap())
+                            .map(|dt| dt.naive_utc())
+                            .unwrap_or_else(|| chrono::Utc::now().naive_utc())
                             .to_string(),
                             created_at: Utc::now().to_string(),
                         };
